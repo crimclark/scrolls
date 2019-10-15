@@ -1,12 +1,5 @@
--- random livecoded sequencer
--- Input 1: clock
--- Input 2: trigger new random sequence
--- Output 1: melody
--- Output 2: envelope
-
-sequence = {}
-index = 0
-queue = {}
+sequence1, sequence2, queue, index1, index2, currentSeq = {}, {}, {}, 0, 0, 1
+sequences = {sequence1, sequence2}
 
 function init()
   rndm()
@@ -14,26 +7,28 @@ function init()
   input[1].change = handleChangeClock
   input[2].mode('change', 1, 0.05, 'rising')
   input[2].change = handleChangeInput2
-  print('Scripture loaded')
+  print('++++++++++++++++scripture++++++++++++++++')
+end
+
+function stepForward(seq, outputA, outputB, index)
+  local step = seq[index + 1]
+  output[outputA].slew = step.slew
+  output[outputA].volts = n2v(step.note)
+  output[outputB].action = step.eg
+  output[outputB]()
 end
 
 function handleChangeClock(state)
-  if index == 0 and #queue > 0 then
-    queue[1]()
-    table.remove(queue, 1)
-  end
-  local step = sequence[index + 1]
-  print(index + 1)
-  output[1].slew = step.slew
-  output[1].volts = n2v(step.note)
-  output[2].action = step.eg
-  output[2]()
-  index = ((index + 1) % #sequence)
+  index1 = ((index1 + 1) % #sequence1)
+  stepForward(sequence1, 1, 2, index1)
+  index2 = ((index2 + 1) % #sequence2)
+  stepForward(sequence2, 3, 4, index2)
 end
 
 function handleChangeInput2(state) rndm() end
 
 function validateRange(first, last)
+  local sequence = getCurrentSeq()
   if last < first or first < 1 or last > #sequence then
     print('invalid params') return false
   end
@@ -47,6 +42,7 @@ function copyStep(step)
 end
 
 function parseArgs(args)
+  local sequence = getCurrentSeq()
   local first, last, value = 1, #sequence, 1
   if #args >= 3 then
     first, last, value = args[1], args[2], args[3]
@@ -58,9 +54,10 @@ function parseArgs(args)
   return {['first'] = first, ['last'] = last, ['value'] = value }
 end
 
--- user functions to invoke from druid below --
+function getCurrentSeq() return sequences[currentSeq] end
+function setSequence(seq) sequences[currentSeq] = seq end
 
-function rndm()
+function generateRandomSequence()
   math.randomseed(time())
   local seq = {}
   local noteOptions = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23}
@@ -69,8 +66,17 @@ function rndm()
     local step = {note = note, slew = 0, eg = ar()}
     table.insert(seq, step)
   end
-  sequence = seq
-  index = 0
+  return seq
+end
+
+-- user functions to invoke from druid below --
+
+function rndm()
+  sequence1 = generateRandomSequence()
+  sequence2 = generateRandomSequence()
+  sequences = {sequence1, sequence2}
+  index1 = 0
+  index2 = 0
   show()
 end
 
@@ -82,11 +88,13 @@ end
 
 -- transpose, default 1 semitone
 function tp(...)
+  local sequence = getCurrentSeq()
   local args = parseArgs({...})
   local first = args['first']
   local last = args['last']
   local value = args['value']
-  print(first .. ' ' .. last .. ' ' .. value)
+  print(first)
+  print(last)
   if not validateRange(first, last) then return end
   for i=first,last do
     sequence[i].note = sequence[i].note + value
@@ -96,6 +104,7 @@ end
 
 -- reverse entire sequence or subsequence if first and last provided
 function rv(first, last)
+  local sequence = getCurrentSeq()
   first = first or 1
   last = last or #sequence
   if not validateRange(first, last) then return end
@@ -111,6 +120,7 @@ end
 
 -- duplicate entire sequence or subsequence if first and last provided
 function cp(first, last)
+  local sequence = getCurrentSeq()
   first = first or 1
   last = last or #sequence
   if not validateRange(first, last) then return end
@@ -121,6 +131,7 @@ function cp(first, last)
 end
 
 function setValueOrRange(args, param)
+  local sequence = getCurrentSeq()
   if #args >= 3 then
     for i=args[1],args[2] do sequence[i][param] = args[3] end
   elseif #args == 2 then
@@ -138,6 +149,7 @@ function eg(...) setValueOrRange({...}, 'eg') end
 
 -- move step to different position
 function mv(step, pos)
+  local sequence = getCurrentSeq()
 --  local fn = function()
     step = step or 1
     pos = pos or #sequence
@@ -154,6 +166,7 @@ end
 
 -- remove range of notes
 function rm(first, last)
+  local sequence = getCurrentSeq()
 --  local fn = function()
     last = last or #sequence
     if not validateRange(first, last) then return end
@@ -166,18 +179,19 @@ function rm(first, last)
     for i=last+1,#sequence do
       table.insert(newSeq, sequence[i])
     end
-    if index > #newSeq then index = 0 end
-    sequence = newSeq
+--    if index > #newSeq then index = 0 end
+    setSequence(newSeq)
     show()
 --  end
 --  table.insert(queue, fn)
 end
 
--- print sequence notes
+-- print selected sequence notes
 function show()
+  local sequence = getCurrentSeq()
   local seq = ''
   for i=1,#sequence do
-    seq = seq .. sequence[i].note .. ' '
+    seq = seq .. sequence2[i].note .. ' '
   end
   print(seq)
 end
