@@ -1,11 +1,18 @@
 -- todo: mod function
--- todo: maxLength property ?
--- todo: scale types
+-- todo: rate property
+-- todo: maxLength property?
 -- todo: rndm only change notes - not other props
 --sequence = {steps = {}, location = 0, maxLength = 8}
 
+scales = {
+  ['diatonic'] = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23},
+  ['pent_minor'] = {0, 3, 5, 7, 10, 12, 15, 17, 19, 22},
+  ['pent_major'] = {0, 2, 4, 7, 9, 12, 14, 16, 19, 21},
+}
+
 function init()
   sequences, queue, index1, index2, currentSeq = {{}, {}}, {}, 0, 0, 1
+  scale = 'pent_major'
   rndm()
   input[1].mode('change', 1, 0.05, 'rising')
   input[1].change = handleChangeClock
@@ -59,9 +66,9 @@ function setSequence(seq) sequences[currentSeq] = seq end
 function generateRandomSequence()
   math.randomseed(time())
   local seq = {}
-  local noteOptions = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23}
+  local noteOptions = scales[scale]
   for i=1,8 do
-    local note = noteOptions[math.floor(math.random(1, 14))]
+    local note = noteOptions[math.floor(math.random(1, #noteOptions))]
     local step = {note = note, slew = 0, eg = ar()}
     table.insert(seq, step)
   end
