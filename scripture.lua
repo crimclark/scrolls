@@ -1,7 +1,11 @@
-sequence1, sequence2, queue, index1, index2, currentSeq = {}, {}, {}, 0, 0, 1
-sequences = {sequence1, sequence2}
+-- todo: mod function
+-- todo: maxLength property ?
+-- todo: scale types
+-- todo: rndm only change notes - not other props
+--sequence = {steps = {}, location = 0, maxLength = 8}
 
 function init()
+  sequences, queue, index1, index2, currentSeq = {{}, {}}, {}, 0, 0, 1
   rndm()
   input[1].mode('change', 1, 0.05, 'rising')
   input[1].change = handleChangeClock
@@ -16,20 +20,18 @@ function stepForward(seq, outputA, outputB, index)
   output[outputA].volts = n2v(step.note)
   output[outputB].action = step.eg
   output[outputB]()
+  return (index + 1) % #seq
 end
 
 function handleChangeClock(state)
-  index1 = ((index1 + 1) % #sequence1)
-  stepForward(sequence1, 1, 2, index1)
-  index2 = ((index2 + 1) % #sequence2)
-  stepForward(sequence2, 3, 4, index2)
+  index1 = stepForward(sequences[1], 1, 2, index1)
+  index2 = stepForward(sequences[2], 3, 4, index2)
 end
 
 function handleChangeInput2(state) rndm() end
 
 function validateRange(first, last)
-  local sequence = getCurrentSeq()
-  if last < first or first < 1 or last > #sequence then
+  if last < first or first < 1 or last > #getCurrentSeq() then
     print('invalid params') return false
   end
   return true
@@ -42,16 +44,13 @@ function copyStep(step)
 end
 
 function parseArgs(args)
-  local sequence = getCurrentSeq()
-  local first, last, value = 1, #sequence, 1
-  if #args >= 3 then
-    first, last, value = args[1], args[2], args[3]
-  elseif #args == 2 then
-    first, last, value = args[1], #sequence, args[2]
-  elseif #args == 1 then
-    value = args[1]
+  local sequenceLength = #getCurrentSeq()
+  local first, last, value = 1, sequenceLength, 1
+  if #args >= 3 then first, last, value = args[1], args[2], args[3]
+    elseif #args == 2 then first, last, value = args[1], sequenceLength, args[2]
+    elseif #args == 1 then value = args[1]
   end
-  return {['first'] = first, ['last'] = last, ['value'] = value }
+  return {['first'] = first, ['last'] = last, ['value'] = value}
 end
 
 function getCurrentSeq() return sequences[currentSeq] end
@@ -70,11 +69,8 @@ function generateRandomSequence()
 end
 
 -- user functions to invoke from druid below --
-
 function rndm()
-  sequence1 = generateRandomSequence()
-  sequence2 = generateRandomSequence()
-  sequences = {sequence1, sequence2}
+  sequences = {generateRandomSequence(), generateRandomSequence()}
   index1 = 0
   index2 = 0
   show()
@@ -88,13 +84,11 @@ end
 
 -- transpose, default 1 semitone
 function tp(...)
-  local sequence = getCurrentSeq()
   local args = parseArgs({...})
   local first = args['first']
   local last = args['last']
   local value = args['value']
-  print(first)
-  print(last)
+  local sequence = getCurrentSeq()
   if not validateRange(first, last) then return end
   for i=first,last do
     sequence[i].note = sequence[i].note + value
@@ -153,9 +147,7 @@ function mv(step, pos)
 --  local fn = function()
     step = step or 1
     pos = pos or #sequence
-    if sequence[step] == nil or sequence[pos] == nil then
-      print('invalid params') return
-    end
+    if sequence[step] == nil or sequence[pos] == nil then print('invalid params') return end
     local stepToMove = sequence[step]
     table.remove(sequence, step)
     table.insert(sequence, pos, stepToMove)
@@ -167,18 +159,15 @@ end
 -- remove range of notes
 function rm(first, last)
   local sequence = getCurrentSeq()
+  local sequenceLength = #sequence
 --  local fn = function()
-    last = last or #sequence
+    last = last or sequenceLength
     if not validateRange(first, last) then return end
     local newSeq = {}
     if first > 1 then
-      for i=1,first - 1 do
-        table.insert(newSeq, sequence[i])
-      end
+      for i=1,first - 1 do table.insert(newSeq, sequence[i]) end
     end
-    for i=last+1,#sequence do
-      table.insert(newSeq, sequence[i])
-    end
+    for i=last+1,sequenceLength do table.insert(newSeq, sequence[i]) end
 --    if index > #newSeq then index = 0 end
     setSequence(newSeq)
     show()
@@ -186,12 +175,13 @@ function rm(first, last)
 --  table.insert(queue, fn)
 end
 
--- print selected sequence notes
+function edit(seq) if seq == 1 or seq == 2 then currentSeq = seq end end
+
 function show()
-  local sequence = getCurrentSeq()
-  local seq = ''
-  for i=1,#sequence do
-    seq = seq .. sequence2[i].note .. ' '
+  for i=1,2 do
+    local sequence = sequences[i]
+    local seq = 'sequence ' .. i .. ': '
+    for j=1,#sequence do seq = seq .. sequence[j].note .. ' ' end
+    print(seq)
   end
-  print(seq)
 end
