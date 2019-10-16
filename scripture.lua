@@ -2,17 +2,20 @@
 -- todo: rate property
 -- todo: maxLength property?
 -- todo: rndm only change notes - not other props
+-- todo: mute steps
 --sequence = {steps = {}, location = 0, maxLength = 8}
 
 scales = {
   ['diatonic'] = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23},
   ['pent_minor'] = {0, 3, 5, 7, 10, 12, 15, 17, 19, 22},
   ['pent_major'] = {0, 2, 4, 7, 9, 12, 14, 16, 19, 21},
+  ['whole'] = {0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22}
 }
+count = 1
 
 function init()
   sequences, queue, index1, index2, currentSeq = {{}, {}}, {}, 0, 0, 1
-  scale = 'pent_major'
+  scale = 'pent_minor'
   rndm()
   input[1].mode('change', 1, 0.05, 'rising')
   input[1].change = handleChangeClock
@@ -31,8 +34,13 @@ function stepForward(seq, outputA, outputB, index)
 end
 
 function handleChangeClock(state)
+  div2 = 2
+  count = (count % div2) + 1
+
   index1 = stepForward(sequences[1], 1, 2, index1)
-  index2 = stepForward(sequences[2], 3, 4, index2)
+  if count == 1 then
+    index2 = stepForward(sequences[2], 3, 4, index2)
+  end
 end
 
 function handleChangeInput2(state) rndm() end
