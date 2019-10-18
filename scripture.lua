@@ -1,28 +1,15 @@
--- todo: maxLength property?
--- todo: input2 - configurable - reset, rndm, mod, rv, cycle through all?
--- todo: drnkOct, drnkMod, rndmInt(range)?
--- todo: add minor scale - update semitones for minor scale
--- todo: ptrn and loop
--- todo: per step divs?
--- todo: remove tp - update mod and oct
--- todo: rndm only change notes - not other props
--- todo: mute steps
---sequence = {steps = {}, location = 0, maxLength = 8}
-
 scales = {
   ['diatonic'] = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23},
-  ['pent_minor'] = {0, 3, 5, 7, 10, 12, 15, 17, 19, 22},
   ['pent_major'] = {0, 2, 4, 7, 9, 12, 14, 16, 19, 21},
 }
 semitonesMajor = {2, 2, 1, 2, 2, 2, 1}
-semitonesMinor = {2, 1, 2, 2, 1, 2, 2 }
 defaultLength = 8
 
 count = {1, 1}
 divs = {1, 2}
 
 function init()
-  sequences, queue, index1, index2, currentSeq = {{}, {}}, {}, 0, 0, 1
+  sequences, queues, seqLocations, currentSeq = {{}, {}}, {{}, {}}, {0, 0}, 1
   scale = 'pent_major'
   rndm()
   input[1].mode('change', 1, 0.05, 'rising')
@@ -44,9 +31,17 @@ function stepForward(seq, outputA, outputB, index)
 end
 
 function handleChangeClock(state)
-  for i=1,2 do count[i] = (count[i] % divs[i]) + 1 end
-  if count[1] == 1 then index1 = stepForward(sequences[1], 1, 2, index1) end
-  if count[2] == 1 then index2 = stepForward(sequences[2], 3, 4, index2) end
+  for i=1,2 do
+    count[i] = (count[i] % divs[i]) + 1
+    if count[i] == 1 then
+      if #queues[i] > 0 and seqLocations[i] == 1 then
+        queues[i][1]()
+        table.remove(queues[i], 1)
+      end
+      local outputA = 1%i + i
+      seqLocations[i] = stepForward(sequences[i], outputA, outputA+1, seqLocations[i])
+    end
+  end
 end
 
 function handleChangeInput2(state) rndm() end
@@ -104,6 +99,10 @@ function randomizeNotes(seq)
   return seq
 end
 
+function updateQueue(action)
+  table.insert(queues[currentSeq], action)
+end
+
 -- user functions to invoke from druid below --
 function rndm()
 --  sequences = {generateRandomSequence(), generateRandomSequence() }
@@ -115,7 +114,10 @@ end
 -- change octaves, default 1 octave up entire sequence
 function oct(...)
   local args = parseArgs({...})
-  tp(args['first'], args['last'], 12*args['value'])
+  local fn = function()
+    tp(args['first'], args['last'], 12*args['value'])
+  end
+  updateQueue(fn)
 end
 
 function mod(value)
@@ -266,7 +268,7 @@ function findIntervalNote(startNote, interval)
   end
 end
 
-function reset() index1, index2 = 0, 0 end
+function reset() seqLocations = {0, 0} end
 
 function sync(a)
   if not a then a = 1 end
