@@ -4,9 +4,11 @@ scales = {
 }
 semitonesMajor = {2, 2, 1, 2, 2, 2, 1}
 defaultLength = 8
-
 count = {1, 1}
 divs = {1, 2}
+currentLoop = {0, 0}
+fnIds = {0, 0}
+prevSequence = {{}, {}}
 
 function init()
   sequences, queues, seqLocations, currentSeq = {{}, {}}, {{}, {}}, {0, 0}, 1
@@ -20,7 +22,7 @@ function init()
 end
 
 function stepForward(seq, outputA, outputB, index)
-  local step = seq[index + 1]
+  local step = seq[index+1]
   if not step.mute then
     output[outputA].slew = step.slew
     output[outputA].volts = n2v(step.note)
@@ -30,13 +32,27 @@ function stepForward(seq, outputA, outputB, index)
   return (index + 1) % #seq
 end
 
-function handleChangeClock(state)
+function handleChangeClock(s)
   for i=1,2 do
     count[i] = (count[i] % divs[i]) + 1
     if count[i] == 1 then
-      if #queues[i] > 0 and seqLocations[i] == 1 then
-        queues[i][1]()
-        table.remove(queues[i], 1)
+      if seqLocations[i] == 1 then
+        if #prevSequence[i] > 0 and #queues[i] == 0 then sequences[i] = prevSequence[i] end
+        if #queues[i] > 0 and currentLoop[i] <= queues[i][1].count then
+          print(#queues[i])
+          if #prevSequence[i] == 0 then prevSequence[i] = getCurrentSeq() end
+          local fnId = queues[i][1].id
+          if fnId ~= fnIds[i] then
+            fnIds[i] = fnId
+            sequences[i] = queues[i][1].fn()
+          end
+          currentLoop[i] = currentLoop[i]+1
+          if currentLoop[i] == queues[i][1].count then table.remove(queues[i], 1) currentLoop[i] = 0 end
+        end
+        if #queues[i] > 0 and queues[i][1].count == -1 then
+          sequences[i] = queues[i][1].fn()
+          table.remove(queues[i], 1)
+        end
       end
       local outputA = 1%i + i
       seqLocations[i] = stepForward(sequences[i], outputA, outputA+1, seqLocations[i])
@@ -45,12 +61,14 @@ function handleChangeClock(state)
 end
 
 function handleChangeInput2(state) rndm() end
-
 function validateRange(first, last)
-  if last < first or first < 1 or last > #getCurrentSeq() then
-    print('invalid params') return false
-  end
-  return true
+  if last < first or first < 1 or last > #getCurrentSeq() then print('invalid params') return false end return true
+end
+
+function copySeq(seq)
+  local newSeq = {}
+  for i,v in ipairs(seq) do newSeq[i] = copyStep(v) end
+  return newSeq
 end
 
 function copyStep(step)
@@ -77,8 +95,6 @@ function generateRandomSequence()
   local seq = {}
   local noteOptions = scales[scale]
   for i=1,8 do
---    local mute = math.floor(math.random(0, 3)) == 0 and true or false
---    if mute == true then print('w') end
     local note = noteOptions[math.floor(math.random(1, #noteOptions))]
     local step = {note = note, slew = 0, eg = ar(), mute = mute}
     table.insert(seq, step)
@@ -99,49 +115,57 @@ function randomizeNotes(seq)
   return seq
 end
 
-function updateQueue(action)
-  table.insert(queues[currentSeq], action)
+function updateQueue(fn, count)
+  count = count or 1
+  table.insert(queues[currentSeq], {fn = fn, count = count, id = time()})
+  return fn
 end
 
--- user functions to invoke from druid below --
 function rndm()
---  sequences = {generateRandomSequence(), generateRandomSequence() }
   sequences = {randomizeNotes(sequences[1]), randomizeNotes(sequences[2]) }
   reset()
   shw()
 end
 
--- change octaves, default 1 octave up entire sequence
+function ptrn(...)
+  local args = {... }
+  local newQueue = {}
+  for i,v in ipairs(args) do
+    local fn = v[1]
+    local count = v[2]
+    table.insert(newQueue, {fn = fn, count = count, id = time()+i})
+  end
+  queues[currentSeq] = newQueue
+end
+
 function oct(...)
   local args = parseArgs({...})
-  local fn = function()
-    tp(args['first'], args['last'], 12*args['value'])
-  end
-  updateQueue(fn)
+  local fn = function() return tp(args['first'], args['last'], 12*args['value']) end;
+  updateQueue(fn, -1)
+  return fn
 end
 
 function mod(value)
-  local sequence = getCurrentSeq()
-  for i=1,#sequence do
-    sequence[i].note = findIntervalNote(sequence[i].note, value)
+  local seq = copySeq(getCurrentSeq())
+  local fn = function()
+    for i=1,#seq do seq[i].note = findIntervalNote(seq[i].note, value) end
+    return seq
   end
+  updateQueue(fn, -1)
+  return fn
 end
 
--- transpose, default 1 semitone
 function tp(...)
   local args = parseArgs({...})
   local first = args['first']
   local last = args['last']
   local value = args['value']
-  local sequence = getCurrentSeq()
+  local seq = copySeq(getCurrentSeq())
   if not validateRange(first, last) then return end
-  for i=first,last do
-    sequence[i].note = sequence[i].note + value
-  end
-  shw()
+  for i=first,last do seq[i].note = seq[i].note + value end
+--  return seq
 end
 
--- reverse entire sequence or subsequence if first and last provided
 function rv(first, last)
   local sequence = getCurrentSeq()
   first = first or 1
@@ -157,18 +181,6 @@ function rv(first, last)
   shw()
 end
 
--- duplicate entire sequence or subsequence if first and last provided
-function cp(first, last)
-  local sequence = getCurrentSeq()
-  first = first or 1
-  last = last or #sequence
-  if not validateRange(first, last) then return end
-  for i=first,last do
-    table.insert(sequence, copyStep(sequence[i]))
-  end
-  shw()
-end
-
 function setValueOrRange(args, param)
   local sequence = getCurrentSeq()
   if #args >= 3 then
@@ -180,44 +192,32 @@ function setValueOrRange(args, param)
   end
 end
 
--- slew - if only 2 args, slew step at arg1 with value at arg2 - else slew range
 function slw(...) setValueOrRange({...}, 'slew') end
-
--- change step envelope, value is ASL function - if only 2 args, slew step at arg1 with value at arg2 - else slew range
 function eg(...) setValueOrRange({...}, 'eg') end
 
--- move step to different position
 function mv(step, pos)
   local sequence = getCurrentSeq()
---  local fn = function()
-    step = step or 1
-    pos = pos or #sequence
-    if sequence[step] == nil or sequence[pos] == nil then print('invalid params') return end
-    local stepToMove = sequence[step]
-    table.remove(sequence, step)
-    table.insert(sequence, pos, stepToMove)
-    shw()
---  end
---  table.insert(queue, fn)
+  step = step or 1
+  pos = pos or #sequence
+  if sequence[step] == nil or sequence[pos] == nil then print('invalid params') return end
+  local stepToMove = sequence[step]
+  table.remove(sequence, step)
+  table.insert(sequence, pos, stepToMove)
+  shw()
 end
 
--- remove range of notes
 function rm(first, last)
   local sequence = getCurrentSeq()
   local sequenceLength = #sequence
---  local fn = function()
-    last = last or sequenceLength
-    if not validateRange(first, last) then return end
-    local newSeq = {}
-    if first > 1 then
-      for i=1,first - 1 do table.insert(newSeq, sequence[i]) end
-    end
-    for i=last+1,sequenceLength do table.insert(newSeq, sequence[i]) end
---    if index > #newSeq then index = 0 end
-    setSequence(newSeq)
-    shw()
---  end
---  table.insert(queue, fn)
+  last = last or sequenceLength
+  if not validateRange(first, last) then return end
+  local newSeq = {}
+  if first > 1 then
+    for i=1,first - 1 do table.insert(newSeq, sequence[i]) end
+  end
+  for i=last+1,sequenceLength do table.insert(newSeq, sequence[i]) end
+  setSequence(newSeq)
+  shw()
 end
 
 function ed(seq)
