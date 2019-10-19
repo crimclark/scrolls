@@ -8,11 +8,11 @@ count = {1, 1}
 divs = {1, 2}
 currentLoop = {0, 0}
 fnIds = {0, 0}
-prevSequence = {{}, {}}
+prevSequence = {{}, {} }
+queueLocations = {1, 1}
 
 function init()
-  sequences, queues, seqLocations, currentSeq = {{}, {}}, {{}, {}}, {0, 0}, 1
-  scale = 'pent_major'
+  sequences, queues, seqLocations, currentSeq, scale = {{}, {}}, {{}, {}}, {0, 0}, 1, 'pent_major'
   rndm()
   input[1].mode('change', 1, 0.05, 'rising')
   input[1].change = handleChangeClock
@@ -37,21 +37,24 @@ function handleChangeClock(s)
     count[i] = (count[i] % divs[i]) + 1
     if count[i] == 1 then
       if seqLocations[i] == 1 then
-        if #prevSequence[i] > 0 and #queues[i] == 0 then sequences[i] = prevSequence[i] end
-        if #queues[i] > 0 and currentLoop[i] <= queues[i][1].count then
-          print(#queues[i])
+        if #prevSequence[i] > 0 and queueLocations[i] > #queues[i] then sequences[i] = prevSequence[i] queueLocations[i] = 1 end
+        local queueLoc = queueLocations[i]
+        if #queues[i] > 0 and currentLoop[i] <= queues[i][queueLoc].count then
           if #prevSequence[i] == 0 then prevSequence[i] = getCurrentSeq() end
-          local fnId = queues[i][1].id
+          local fnId = queues[i][queueLoc].id
           if fnId ~= fnIds[i] then
-            fnIds[i] = fnId
-            sequences[i] = queues[i][1].fn()
+            fnIds[i] = fnId sequences[i] = queues[i][queueLoc].fn()
           end
           currentLoop[i] = currentLoop[i]+1
-          if currentLoop[i] == queues[i][1].count then table.remove(queues[i], 1) currentLoop[i] = 0 end
+          if currentLoop[i] == queues[i][queueLoc].count then
+            queueLocations[i] = queueLoc + 1
+            currentLoop[i] = 0
+          end
         end
-        if #queues[i] > 0 and queues[i][1].count == -1 then
-          sequences[i] = queues[i][1].fn()
-          table.remove(queues[i], 1)
+        if #queues[i] > 0 and queues[i][queueLoc].count == -1 then
+          if #prevSequence[i] == 0 then prevSequence[i] = getCurrentSeq() end
+          sequences[i] = queues[i][queueLoc].fn()
+          queueLocations[i] = queueLoc + 1
         end
       end
       local outputA = 1%i + i
@@ -135,7 +138,7 @@ function ptrn(...)
     local count = v[2]
     table.insert(newQueue, {fn = fn, count = count, id = time()+i})
   end
-  queues[currentSeq] = newQueue
+  queues[currentSeq] = newQueue queueLocations[currentSeq] = 1
 end
 
 function oct(...)
@@ -146,8 +149,8 @@ function oct(...)
 end
 
 function mod(value)
-  local seq = copySeq(getCurrentSeq())
   local fn = function()
+    local seq = copySeq(getCurrentSeq())
     for i=1,#seq do seq[i].note = findIntervalNote(seq[i].note, value) end
     return seq
   end
@@ -163,7 +166,7 @@ function tp(...)
   local seq = copySeq(getCurrentSeq())
   if not validateRange(first, last) then return end
   for i=first,last do seq[i].note = seq[i].note + value end
---  return seq
+  return seq
 end
 
 function rv(first, last)
@@ -267,7 +270,6 @@ function findIntervalNote(startNote, interval)
     return intervalNote
   end
 end
-
 function reset() seqLocations = {0, 0} end
 
 function sync(a)
@@ -278,4 +280,3 @@ function sync(a)
   local seqA, seqB = sequences[a], sequences[b]
   for i=1,#seqA do seqB[i] = copyStep(seqA[i]) end
 end
-
