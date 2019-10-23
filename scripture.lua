@@ -6,11 +6,27 @@ function init()
   semitonesMaj, defaultLn = {2,2,1,2,2,2,1}, 8
   count, div, currentLoop, fnIds, prevSeq, queueLocations = {1,1}, {1,2}, {0,0}, {0,0}, {{},{}}, {1,1}
   sequences, queues, seqLocations, currentSeq, scale = {{}, {}}, {{}, {}}, {0,0}, 1, 'pent_major'
-  rndm()
-  input[1].mode('change', 1, 0.05, 'rising')
+  sequences = {randomizeNotes(sequences[1]), randomizeNotes(sequences[2])}
+  for i=1,2 do input[i].mode('change', 1, 0.05, 'rising') end
   input[1].change = handleChangeClock
-  input[2].mode('change', 1, 0.05, 'rising')
   input[2].change = handleChangeInput2
+end
+
+function handleChangeClock(s)
+  for i=1,2 do
+    count[i] = count[i] % div[i] + 1
+    if count[i] == 1 then handleNewStep(i) end
+  end
+end
+
+function handleChangeInput2(s)
+  sequences = {randomizeNotes(sequences[1]), randomizeNotes(sequences[2]) }
+  reset()
+end
+
+function handleNewStep(i)
+  if seqLocations[i] == 1 then handleSeqStart(i) end
+  seqLocations[i] = stepForward(sequences[i], 1%i+i, 1%i+i+1, seqLocations[i])
 end
 
 function stepForward(seq, outputA, outputB, index)
@@ -21,18 +37,6 @@ function stepForward(seq, outputA, outputB, index)
     output[outputB]()
   end
   return (index+1) % #seq
-end
-
-function handleChangeClock(s)
-  for i=1,2 do
-    count[i] = count[i] % div[i] + 1
-    if count[i] == 1 then handleNewStep(i) end
-  end
-end
-
-function handleNewStep(i)
-  if seqLocations[i] == 1 then handleSeqStart(i) end
-  seqLocations[i] = stepForward(sequences[i], 1%i+i, 1%i+i+1, seqLocations[i])
 end
 
 function handleSeqStart(i)
@@ -66,8 +70,6 @@ function loopAction(i, queueLoc)
   queueLocations[i] = queueLoc+1
 end
 
-function handleChangeInput2(s) rndm() end
-
 function copySeq(seq)
   local newSeq = {}
   for _,step in ipairs(seq) do
@@ -99,104 +101,6 @@ function randomizeNotes(seq)
   return seq
 end
 
-function updateQueue(fn, count)
-  table.insert(queues[currentSeq], {fn = fn, count = count or 1, id = time()})
-  return fn
-end
-
-function rndm()
-  sequences = {randomizeNotes(sequences[1]), randomizeNotes(sequences[2]) }
-  reset()
-end
-
-function ptrn(...)
-  local newQueue = {}
-  for i,v in ipairs({...}) do
-    local count = v[2] or 1
-    table.insert(newQueue, {fn = v[1], count = count, id = time()+i})
-  end
-  queues[currentSeq] = newQueue
-  queueLocations[currentSeq] = 1
-end
-
-function oct(...)
-  local args = parseArgs({...})
-  local fn = function(seq)
-    for i=args.first,args.last do seq[i].note = seq[i].note + args.value*12 end
-    return seq
-  end;
-  return updateQueue(fn, -1)
-end
-
-function mod(...)
-  local args = parseArgs({...})
-  local fn = function(seq)
-    for i=args.first,args.last do seq[i].note = findIntervalNote(seq[i].note, args.value) end
-    return seq
-  end
-  return updateQueue(fn, -1)
-end
-
-function rv(first, last)
-  local fn = function(seq)
-    first = first or 1
-    last = last or #seq
-    local reversed = {}
-    local idx = first
-    for i=last,first,-1 do
-      reversed[idx] = seq[i]
-      idx = idx+1
-    end
-    for i=first,last do seq[i] = reversed[i] end
-    return seq
-  end
-  return updateQueue(fn, -1)
-end
-
-function setValueOrRange(args, param)
-  local seq = #prevSeq[currentSeq] > 0 and prevSeq[currentSeq] or sequences[currentSeq]
-  if #args >= 3 then for i=args[1],args[2] do seq[i][param] = args[3] end
-  elseif #args == 2 then seq[args[1]][param] = args[2]
-  elseif #args == 1 then for i=1,#seq do seq[i][param] = args[1] end
-  end
-end
-
-function slw(...) setValueOrRange({...}, 'slew') end
-function eg(...) setValueOrRange({...}, 'eg') end
-
-function mv(step, pos)
-  local fn = function(seq)
-    step = step or 1
-    table.remove(seq, step)
-    table.insert(seq, pos or #seq, seq[step])
-    return seq
-  end
-  return updateQueue(fn, -1)
-end
-
-function rm(first, last)
-  local fn = function(seq)
-    local newSeq = {}
-    if first > 1 then for i=1,first-1 do table.insert(newSeq, seq[i]) end end
-    for i=(last or #seq)+1,#sequences[currentSeq] do table.insert(newSeq, seq[i]) end
-    return newSeq
-  end
-  return updateQueue(fn, -1)
-end
-
-function ed(seq)
-  if not seq then currentSeq = currentSeq%2 + 1 return end
-  if seq == 1 or seq == 2 then currentSeq = seq end
-end
-
-function shw()
-  for i=1,2 do
-    local seq = 'sequence ' .. i .. ': '
-    for j=1,#sequences[i] do seq = seq .. sequences[i][j].note .. ' ' end
-    print(seq)
-  end
-end
-
 function findScaleDegree(note)
   while note < 0 do note = note + 12 end
   if note == 0 then return 1 end
@@ -225,7 +129,16 @@ function findIntervalNote(startNote, interval)
   end
   return intervalNote
 end
+
 function reset() seqLocations = {0, 0} end
+
+function setValueOrRange(args, param)
+  local seq = #prevSeq[currentSeq] > 0 and prevSeq[currentSeq] or sequences[currentSeq]
+  if #args >= 3 then for i=args[1],args[2] do seq[i][param] = args[3] end
+  elseif #args == 2 then seq[args[1]][param] = args[2]
+  elseif #args == 1 then for i=1,#seq do seq[i][param] = args[1] end
+  end
+end
 
 function sync(a)
   if not a then a = 1 end
@@ -233,3 +146,94 @@ function sync(a)
   local b = a == 1 and 2 or 1
   sequences[b] = copySeq(sequences[a])
 end
+
+function updateQueue(fn, count)
+  table.insert(queues[currentSeq], {fn = fn, count = count or 1, id = time()})
+  return fn
+end
+
+function s(seq)
+  seq = seq or currentSeq
+  prevSeq[seq] = sequences[seq]
+  ptrn()
+end
+
+function rndm()
+  return updateQueue(function(seq) return randomizeNotes(seq) end, -1)
+end
+
+function ptrn(...)
+  local newQueue = {}
+  for i,v in ipairs({...}) do
+    local count = v[2] or 1
+    table.insert(newQueue, {fn = v[1], count = count, id = time()+i})
+  end
+  queues[currentSeq] = newQueue
+  queueLocations[currentSeq] = 1
+end
+
+function oct(...)
+  local args = parseArgs({...})
+  return updateQueue(function(seq)
+    for i=args.first,args.last do seq[i].note = seq[i].note + args.value*12 end
+    return seq
+  end, -1)
+end
+
+function mod(...)
+  local args = parseArgs({...})
+  return updateQueue(function(seq)
+    for i=args.first,args.last do seq[i].note = findIntervalNote(seq[i].note, args.value) end
+    return seq
+  end, -1)
+end
+
+function rv(first, last)
+  return updateQueue(function(seq)
+    first = first or 1
+    last = last or #seq
+    local reversed = {}
+    local idx = first
+    for i=last,first,-1 do
+      reversed[idx] = seq[i]
+      idx = idx+1
+    end
+    for i=first,last do seq[i] = reversed[i] end
+    return seq
+  end, -1)
+end
+
+function slw(...) setValueOrRange({...}, 'slew') end
+function eg(...) setValueOrRange({...}, 'eg') end
+
+function mv(step, pos)
+  return updateQueue(function(seq)
+    step = step or 1
+    table.remove(seq, step)
+    table.insert(seq, pos or #seq, seq[step])
+    return seq
+  end, -1)
+end
+
+function rm(first, last)
+  return updateQueue(function(seq)
+    local newSeq = {}
+    if first > 1 then for i=1,first-1 do table.insert(newSeq, seq[i]) end end
+    for i=(last or #seq)+1,#sequences[currentSeq] do table.insert(newSeq, seq[i]) end
+    return newSeq
+  end, -1)
+end
+
+function ed(seq)
+  if not seq then currentSeq = currentSeq%2 + 1 return end
+  if seq == 1 or seq == 2 then currentSeq = seq end
+end
+
+function shw()
+  for i=1,2 do
+    local seq = 'sequence ' .. i .. ': '
+    for j=1,#sequences[i] do seq = seq .. sequences[i][j].note .. ' ' end
+    print(seq)
+  end
+end
+
