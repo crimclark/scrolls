@@ -5,10 +5,11 @@ function init()
   }
   semitonesMaj, defaultLn = {2,2,1,2,2,2,1}, 8
   count, div, currentLoop, fnIds, prevSeq, queueLocations = {1,1}, {1,2}, {0,0}, {0,0}, {{},{}}, {1,1}
-  sequences, queues, seqLocations, currentSeq, scale = {{}, {}}, {{}, {}}, {0,0}, 1, 'pent_major'
+  sequences, queues, seqLocations, currentSeq, scale = {{}, {}}, {{}, {}}, {0,0}, 1, 'diatonic'
   sequences = {randomizeNotes(sequences[1]), randomizeNotes(sequences[2])}
-  for i=1,2 do input[i].mode('change', 1, 0.05, 'rising') end
+  input[1].mode('change', .5, 0.05, 'rising')
   input[1].change = handleChangeClock
+  input[2].mode('change', .5, 0.05, 'rising')
   input[2].change = handleChangeInput2
 end
 
@@ -20,7 +21,7 @@ function handleChangeClock(s)
 end
 
 function handleChangeInput2(s)
-  sequences = {randomizeNotes(sequences[1]), randomizeNotes(sequences[2]) }
+  sequences = {randomizeNotes(sequences[1]), randomizeNotes(sequences[2])}
   reset()
 end
 
@@ -30,7 +31,7 @@ function handleNewStep(i)
 end
 
 function stepForward(seq, outputA, outputB, index)
-  if not seq[index+1].mute then
+  if seq[index+1] ~= nil and not seq[index+1].mute then
     output[outputA].slew = seq[index+1].slew
     output[outputA].volts = n2v(seq[index+1].note)
     output[outputB].action = seq[index+1].eg
@@ -94,7 +95,7 @@ function randomizeNotes(seq)
   local length = #seq > 0 and #seq or defaultLn
   for i=1,length do
     local mute = math.random(4) == 1 and true or false
-    if not seq[i] then seq[i] = {slew = 0, eg = ar(), mute = mute} end
+    if not seq[i] then seq[i] = {slew = 0, eg = ar(0, 0.18), mute = mute} end
     seq[i].note = scales[scale][math.floor(math.random(1, #scales[scale]))]
     table.insert(seq, step)
   end
@@ -163,10 +164,20 @@ function rndm()
 end
 
 function ptrn(...)
+  local args = {...}
   local newQueue = {}
-  for i,v in ipairs({...}) do
-    local count = v[2] or 1
-    table.insert(newQueue, {fn = v[1], count = count, id = time()+i})
+  local i = 1
+  while i <= #args do
+    if type(args[i]) == 'function' then
+      local fn = args[i]
+      local count = 1
+      if type(args[i+1]) == 'number' then
+        count = args[i+1]
+        i = i+2
+      else i = i+1 end
+      table.insert(newQueue, {fn = fn, count = count, id = time()+i})
+    else i = i+1
+    end
   end
   queues[currentSeq] = newQueue
   queueLocations[currentSeq] = 1
@@ -225,7 +236,7 @@ function rm(first, last)
 end
 
 function ed(seq)
-  if not seq then currentSeq = currentSeq%2 + 1 return end
+  if not seq then currentSeq = currentSeq%2+1 return end
   if seq == 1 or seq == 2 then currentSeq = seq end
 end
 
