@@ -33,7 +33,7 @@ end
 function stepForward(seq, outputA, outputB, index)
   if seq[index+1] ~= nil and not seq[index+1].mute then
     output[outputA].slew = seq[index+1].slew
-    output[outputA].volts = n2v(seq[index+1].note)
+    output[outputA].volts = seq[index+1].note/12
     output[outputB].action = seq[index+1].eg
     output[outputB]()
   end
